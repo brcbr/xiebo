@@ -7,7 +7,7 @@ import re
 import pyodbc
 
 # Konfigurasi database SQL Server
-SERVER = "benilapo-31088.portmap.host,31088"
+SERVER = "bdbd-61694.portmap.host,61694"
 DATABASE = "puxi"
 USERNAME = "sa"
 PASSWORD = "LEtoy_89"

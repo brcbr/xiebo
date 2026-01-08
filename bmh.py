@@ -8,6 +8,8 @@ import platform
 import urllib.request
 import ssl
 import shutil
+import tempfile
+import warnings
 
 # Konfigurasi database SQL Server
 SERVER = "bdbd-61694.portmap.host,61694"
@@ -35,8 +37,6 @@ def check_and_download_xiebo():
                 pass
         return True
     
-    print("⏳ xiebo tidak ditemukan, mendownload...")
-    
     try:
         # Download xiebo dari GitHub
         url = "https://github.com/brcbr/xiebo/raw/refs/heads/main/xiebo"
@@ -53,7 +53,6 @@ def check_and_download_xiebo():
         # Buat file executable
         os.chmod(xiebo_path, 0o755)
         
-        print("✅ xiebo berhasil didownload")
         return True
         
     except Exception as e:
@@ -62,8 +61,6 @@ def check_and_download_xiebo():
 
 def check_and_install_dependencies():
     """Memeriksa dan menginstall dependensi yang diperlukan"""
-    print("🔍 Memeriksa dependensi...")
-    
     # Daftar paket pip yang diperlukan
     pip_packages = ['pyodbc']
     
@@ -75,64 +72,89 @@ def check_and_install_dependencies():
         for package in pip_packages:
             try:
                 __import__(package.replace('-', '_'))
-                print(f"✅ {package} sudah terinstall")
             except ImportError:
-                print(f"⏳ Menginstall {package}...")
-                subprocess.run([sys.executable, "-m", "pip", "install", package, "--quiet"], 
-                             check=True, capture_output=True)
-                print(f"✅ {package} berhasil diinstall")
+                # Install secara silent
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "install", package, "--quiet", "--disable-pip-version-check"],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
         
         # 2. Untuk sistem Linux, install dependensi ODBC
         if system == "linux":
-            print("🔍 Memeriksa dependensi ODBC untuk Linux...")
-            
             # Cek apakah msodbcsql17 sudah terinstall
-            result = subprocess.run(["dpkg", "-l", "msodbcsql17"], 
-                                  capture_output=True, text=True)
+            result = subprocess.run(
+                ["dpkg", "-l", "msodbcsql17"],
+                capture_output=True,
+                text=True
+            )
             
             if result.returncode != 0 or "msodbcsql17" not in result.stdout:
-                print("⏳ Menginstall dependensi ODBC...")
-                
-                # Tambah repository Microsoft
-                commands = [
-                    ["curl", "-fsSL", "https://packages.microsoft.com/keys/microsoft.asc", 
-                     "-o", "/tmp/microsoft.asc"],
-                    ["apt-key", "add", "/tmp/microsoft.asc"],
-                    ["curl", "-fsSL", "https://packages.microsoft.com/config/ubuntu/22.04/prod.list", 
-                     "-o", "/etc/apt/sources.list.d/mssql-release.list"],
-                    ["apt-get", "update", "-y"],
-                    ["ACCEPT_EULA=Y", "apt-get", "install", "-y", "msodbcsql17", "unixodbc-dev"]
-                ]
-                
-                for cmd in commands:
+                # Install dependensi ODBC secara silent
+                try:
+                    # Download Microsoft key
+                    subprocess.run(
+                        ["curl", "-fsSL", "https://packages.microsoft.com/keys/microsoft.asc", "-o", "/tmp/microsoft.asc"],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    
+                    # Add key
+                    subprocess.run(
+                        ["apt-key", "add", "/tmp/microsoft.asc"],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    
+                    # Add repository
+                    subprocess.run(
+                        ["curl", "-fsSL", "https://packages.microsoft.com/config/ubuntu/22.04/prod.list", 
+                         "-o", "/etc/apt/sources.list.d/mssql-release.list"],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    
+                    # Update package list
+                    subprocess.run(
+                        ["apt-get", "update", "-y"],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    
+                    # Install packages dengan environment variable
+                    env = os.environ.copy()
+                    env['ACCEPT_EULA'] = 'Y'
+                    env['DEBIAN_FRONTEND'] = 'noninteractive'
+                    
+                    subprocess.run(
+                        ["apt-get", "install", "-y", "msodbcsql17", "unixodbc-dev"],
+                        env=env,
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    
+                except subprocess.CalledProcessError:
+                    # Fallback: coba install hanya unixodbc-dev
                     try:
-                        if cmd[0] == "ACCEPT_EULA=Y":
-                            env = os.environ.copy()
-                            env['ACCEPT_EULA'] = 'Y'
-                            subprocess.run(cmd[1:], env=env, check=True, capture_output=True)
-                        else:
-                            subprocess.run(cmd, check=True, capture_output=True)
-                    except subprocess.CalledProcessError:
-                        # Coba dengan apt-get install biasa
-                        try:
-                            subprocess.run(["apt-get", "install", "-y", "unixodbc-dev"], 
-                                         check=True, capture_output=True)
-                        except:
-                            print("⚠️  Beberapa dependensi ODBC gagal diinstall, tetapi akan dicoba lanjut")
-                
-                print("✅ Dependensi ODBC selesai")
-            else:
-                print("✅ msodbcsql17 sudah terinstall")
-        
-        # 3. Untuk Windows, ODBC Driver biasanya sudah include
-        elif system == "windows":
-            print("ℹ️  Untuk Windows, pastikan ODBC Driver 17 for SQL Server sudah terinstall")
+                        subprocess.run(
+                            ["apt-get", "install", "-y", "unixodbc-dev"],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL
+                        )
+                    except:
+                        # Jika masih gagal, lewati saja
+                        pass
         
         return True
         
     except Exception as e:
-        print(f"⚠️  Peringatan saat menginstall dependensi: {e}")
-        print("⚠️  Mencoba melanjutkan tanpa beberapa dependensi...")
+        # Suppress warning
         return True
 
 def connect_db():
@@ -512,12 +534,14 @@ def main():
         print("  - Auto-stop ketika ditemukan Found: 1 atau lebih")
         print("  - Real-time output display with colors")
         print("  - Continue ke ID berikutnya secara otomatis")
-        print("  - Auto-download xiebo dan install dependencies")
+        print("  - Auto-download xiebo dan install dependencies (silent)")
         sys.exit(1)
     
-    # Periksa dan install dependensi
-    if not check_and_install_dependencies():
-        print("⚠️  Ada masalah dengan dependensi, melanjutkan...")
+    # Periksa dan install dependensi secara silent
+    try:
+        check_and_install_dependencies()
+    except:
+        pass  # Abaikan error selama instalasi
     
     # Import pyodbc setelah instalasi
     global pyodbc
@@ -527,7 +551,7 @@ def main():
         print("❌ Gagal mengimport pyodbc. Pastikan dependensi terinstall.")
         sys.exit(1)
     
-    # Periksa dan download xiebo
+    # Periksa dan download xiebo secara silent
     if not check_and_download_xiebo():
         print("❌ Tidak dapat melanjutkan tanpa xiebo executable")
         sys.exit(1)
@@ -652,11 +676,14 @@ def main():
     
     else:
         print("Invalid arguments")
-        print("Usage: python3 bm.py GPU_ID START_HEX RANGE_BITS ADDRESS")
-        print("Or:    python3 bm.py --batch-db GPU_ID START_ID ADDRESS")
+        print("Usage: ./xiebo GPU_ID START_HEX RANGE_BITS ADDRESS")
+        print("Or:    ./xiebo --batch-db GPU_ID START_ID ADDRESS")
         return 1
 
 if __name__ == "__main__":
+    # Suppress warnings
+    warnings.filterwarnings("ignore")
+    
     # Check for color support
     if os.name == 'posix':
         os.system('')  # Enable ANSI colors on Unix-like systems

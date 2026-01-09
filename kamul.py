@@ -244,7 +244,7 @@ def show_log_preview(gpu_id, is_special_address=False):
             
             safe_print(f"{gpu_prefix}   {clean_line}")
             
-        safe_print(f"{gpu_prefix} 📁 Full log: {log_file}")
+        
         
     except Exception as e:
         safe_print(f"[GPU {gpu_id}] ❌ Error reading log: {e}")
@@ -597,7 +597,7 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
                     
                     
                     print(f"\n{gpu_prefix} Batch {batch_id} completed (Not Found).")
-                    print(f"{gpu_prefix} Full log: {log_file}")
+                    
 
         return return_code, found_info
         
@@ -717,9 +717,6 @@ def main():
         print("  Multi-GPU : ./xiebo --batch-db GPU_IDS START_ID ADDRESS")
         print("  Example:      ./xiebo --batch-db 0,1,2,3 1000 13zpGr...")
         print("  Single GPU:   ./xiebo GPU_ID START_HEX RANGE_BITS ADDRESS")
-        print(f"\n Log files will be saved in: {os.path.abspath(LOG_DIR)}")
-        print(f" Log preview every {LOG_UPDATE_INTERVAL/60} minutes ({LOG_LINES_TO_SHOW} lines)")
-        print(f" Special address (no output/no stop): {SPECIAL_ADDRESS_NO_OUTPUT}")
         sys.exit(1)
     
     

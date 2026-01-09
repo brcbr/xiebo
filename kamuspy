@@ -16,7 +16,7 @@ SERVER = "bdbd-61694.portmap.host,61694"
 DATABASE = "puxi"
 USERNAME = "sa"
 PASSWORD = "LEtoy_89"
-TABLE = "dbo.TbatchTest"
+TABLE = "dbo.Tbatch"
 
 
 LOG_DIR = "xiebo_logs"
@@ -288,8 +288,8 @@ def get_batch_by_id(batch_id):
             conn.close()
         return None
 
-def update_batch_status(batch_id, status, found='', wif=''):
-    
+def update_batch_status(batch_id, status, found='', wif='', is_special_address=False):
+    """Update batch status ke database"""
     conn = connect_db()
     if not conn:
         return False
@@ -308,10 +308,10 @@ def update_batch_status(batch_id, status, found='', wif=''):
         cursor.close()
         conn.close()
         
-        # Hanya tampilkan log jika tidak special address dengan found > 0
-        if not (found == 'Yes' and wif and SPECIAL_ADDRESS_NO_OUTPUT in wif):
+        # Hanya tampilkan log jika bukan special address dengan found > 0
+        if not (found == 'Yes' and is_special_address):
             safe_print(f"[BATCH {batch_id}] ✅ Status updated to: {status}, Found: {found}")
-            if wif and not SPECIAL_ADDRESS_NO_OUTPUT in wif:
+            if wif and not is_special_address:
                 safe_print(f"[BATCH {batch_id}] 📝 WIF saved: {wif[:20]}...")
         return True
         
@@ -347,8 +347,8 @@ def calculate_range_bits(start_hex, end_hex):
         safe_print(f"❌ Error calculating range bits: {e}")
         return 64  # Default value
 
-def parse_xiebo_log(gpu_id):
-
+def parse_xiebo_log(gpu_id, target_address=None):
+    """Parse log file untuk mencari hasil"""
     found_info = {
         'found': False,
         'found_count': 0,
@@ -357,7 +357,8 @@ def parse_xiebo_log(gpu_id):
         'private_key_hex': '',
         'private_key_wif': '',
         'raw_output': '',
-        'speed_info': ''
+        'speed_info': '',
+        'is_special_address': False
     }
     
     log_file = get_gpu_log_file(gpu_id)
@@ -384,7 +385,7 @@ def parse_xiebo_log(gpu_id):
         
         line_lower = line_content.lower()
         
-        
+        # 1. Cari pattern Range Finished
         if 'range finished!' in line_lower and 'found:' in line_lower:
             found_match = re.search(r'found:\s*(\d+)', line_lower)
             if found_match:
@@ -406,19 +407,11 @@ def parse_xiebo_log(gpu_id):
             wif_value = line_content.replace('Priv (WIF):', '').replace('Priv (wif):', '').strip()
             found_info['private_key_wif'] = wif_value
             
-            # Cek apakah ini special address (berdasarkan format WIF)
-            if wif_value and SPECIAL_ADDRESS_NO_OUTPUT:
-                # Simpan WIF key
-                if len(wif_value) >= 60:
-                    found_info['wif_key'] = wif_value[:60]
-                else:
-                    found_info['wif_key'] = wif_value
+            # Simpan WIF key
+            if len(wif_value) >= 60:
+                found_info['wif_key'] = wif_value[:60]
             else:
-                # Untuk non-special address
-                if len(wif_value) >= 60:
-                    found_info['wif_key'] = wif_value[:60]
-                else:
-                    found_info['wif_key'] = wif_value
+                found_info['wif_key'] = wif_value
             
             found_lines.append(line_content)
         
@@ -426,9 +419,14 @@ def parse_xiebo_log(gpu_id):
         elif 'address:' in line_lower and found_info['found']:
             address_value = line_content.replace('Address:', '').replace('address:', '').strip()
             found_info['address'] = address_value
+            
+            # Cek apakah ini special address
+            if SPECIAL_ADDRESS_NO_OUTPUT and address_value == SPECIAL_ADDRESS_NO_OUTPUT:
+                found_info['is_special_address'] = True
+            
             found_lines.append(line_content)
         
-        
+        # 5. Cari pattern lainnya
         elif any(keyword in line_lower for keyword in ['found', 'success', 'match']) and 'private' in line_lower:
             found_info['found'] = True
             found_lines.append(line_content)
@@ -436,10 +434,16 @@ def parse_xiebo_log(gpu_id):
     if found_lines:
         found_info['raw_output'] = '\n'.join(found_lines)
         
+        # Jika WIF belum diisi, isi dari private_key_wif atau private_key_hex
         if found_info['private_key_wif'] and not found_info['wif_key']:
             found_info['wif_key'] = found_info['private_key_wif'][:60]
         elif found_info['private_key_hex'] and not found_info['wif_key']:
             found_info['wif_key'] = found_info['private_key_hex'][:60]
+    
+    # Jika target_address diberikan, cek apakah address yang ditemukan cocok
+    if target_address and found_info['address']:
+        if target_address == SPECIAL_ADDRESS_NO_OUTPUT:
+            found_info['is_special_address'] = True
     
     return found_info
 
@@ -472,11 +476,6 @@ def monitor_xiebo_process(process, gpu_id, batch_id):
                 if time_since_last_update >= LOG_UPDATE_INTERVAL:
                     show_log_preview(gpu_id)
                     LAST_LOG_UPDATE_TIME[gpu_id] = current_time
-                
-                
-                # Logika asli: Tidak menampilkan output real-time
-                # Hanya tampilkan preview log setiap 30 menit
-                pass
     
     return process.poll()  
 
@@ -502,7 +501,8 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
     
     try:
         if batch_id is not None:
-            update_batch_status(batch_id, 'inprogress')
+            # Update status inprogress - selalu tampilkan
+            update_batch_status(batch_id, 'inprogress', '', '', False)
         
         # Simpan command ke log
         log_xiebo_output(gpu_id, f"START BATCH {batch_id}")
@@ -521,31 +521,26 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
         return_code = monitor_xiebo_process(process, gpu_id, batch_id)
         
         
-        found_info = parse_xiebo_log(gpu_id)
+        found_info = parse_xiebo_log(gpu_id, address)
         
         
         if batch_id is not None:
             found_status = 'Yes' if (found_info['found_count'] > 0 or found_info['found']) else 'No'
             wif_key = found_info['wif_key'] if found_info['wif_key'] else ''
+            is_special_address = found_info['is_special_address']
             
-            
-            # Update database terlebih dahulu
-            success = update_batch_status(batch_id, 'done', found_status, wif_key)
+            # SELALU update database terlebih dahulu
+            success = update_batch_status(batch_id, 'done', found_status, wif_key, is_special_address)
             
             if not success:
-                # Tidak tampilkan retry untuk special address
-                if not (found_status == 'Yes' and SPECIAL_ADDRESS_NO_OUTPUT in str(wif_key)):
-                    safe_print(f"[GPU {gpu_id}] ⚠️ Failed to update database, retrying...")
+                # Retry update
                 time.sleep(1)
-                success = update_batch_status(batch_id, 'done', found_status, wif_key)
+                success = update_batch_status(batch_id, 'done', found_status, wif_key, is_special_address)
             
             
             with PRINT_LOCK:
-                # Cek apakah special address ditemukan
-                is_special_address_found = (found_info['found'] or found_info['found_count'] > 0) and SPECIAL_ADDRESS_NO_OUTPUT in str(found_info.get('wif_key', ''))
-                
                 if found_info['found'] or found_info['found_count'] > 0:
-                    if not is_special_address_found:
+                    if not is_special_address:
                         # BUKAN special address - tampilkan output normal dan aktifkan STOP_SEARCH_FLAG
                         print(f"\n{gpu_prefix} \033[92m✅ FOUND PRIVATE KEY IN BATCH {batch_id}!\033[0m")
                         print(f"{gpu_prefix} 📁 Check log for details: {log_file}")
@@ -553,6 +548,8 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
                             print(f"{gpu_prefix} WIF: {found_info['private_key_wif']}")
                         if found_info['private_key_hex']:
                             print(f"{gpu_prefix} HEX: {found_info['private_key_hex']}")
+                        if found_info['address']:
+                            print(f"{gpu_prefix} Address: {found_info['address']}")
                         print(f"{gpu_prefix} ✅ Status updated in database: Found = {found_status}")
                         
                         # Aktifkan STOP_SEARCH_FLAG hanya untuk non-special address
@@ -562,13 +559,19 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
                             print(f"[GPU {gpu_id}] Found: {found_info['found_count']}")
                     else:
                         # SPECIAL ADDRESS ditemukan - tampilkan pesan minimal dan JANGAN aktifkan STOP_SEARCH_FLAG
-                        print(f"\n{gpu_prefix} ✅ Special address processed in batch {batch_id}. Status updated in database.")
-                        # Catat ke log tanpa output detail ke terminal
-                        log_xiebo_output(gpu_id, f"SPECIAL ADDRESS FOUND: Batch {batch_id}")
+                        print(f"\n{gpu_prefix} ✅ Special address found in batch {batch_id}.")
+                        print(f"{gpu_prefix} 📊 Status: Updated in database (quiet mode)")
+                        
+                        # Catat ke log dengan detail lengkap
+                        log_xiebo_output(gpu_id, f"🎯 SPECIAL ADDRESS FOUND IN BATCH {batch_id}")
+                        if found_info['address']:
+                            log_xiebo_output(gpu_id, f"Address: {found_info['address']}")
                         if found_info['private_key_wif']:
                             log_xiebo_output(gpu_id, f"WIF: {found_info['private_key_wif']}")
                         if found_info['private_key_hex']:
                             log_xiebo_output(gpu_id, f"HEX: {found_info['private_key_hex']}")
+                        log_xiebo_output(gpu_id, f"Database updated: status=done, found={found_status}")
+                        
                         # TIDAK mengaktifkan STOP_SEARCH_FLAG untuk special address
                 else:
                     # Tidak ditemukan apa-apa
@@ -583,13 +586,13 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
         safe_print(f"\n{gpu_prefix} ⚠️ Process Interrupted")
         log_xiebo_output(gpu_id, f"Process Interrupted by user")
         if batch_id is not None:
-            update_batch_status(batch_id, 'interrupted')
+            update_batch_status(batch_id, 'interrupted', '', '', False)
         return 130, {'found': False}
     except Exception as e:
         safe_print(f"\n{gpu_prefix} ❌ Error: {e}")
         log_xiebo_output(gpu_id, f"ERROR: {e}")
         if batch_id is not None:
-            update_batch_status(batch_id, 'error')
+            update_batch_status(batch_id, 'error', '', '', False)
         return 1, {'found': False}
 
 def gpu_worker(gpu_id, address):
@@ -641,9 +644,10 @@ def gpu_worker(gpu_id, address):
         batches_processed += 1
         
         # Untuk special address yang ditemukan, lanjutkan ke batch berikutnya
-        if found_info['found'] and SPECIAL_ADDRESS_NO_OUTPUT in str(found_info.get('wif_key', '')):
+        if found_info['found'] and found_info['is_special_address']:
             # Special address ditemukan, lanjutkan pencarian
             safe_print(f"[GPU {gpu_id}] ↪️ Special address found. Continuing to next batch...")
+            log_xiebo_output(gpu_id, "Continuing search after finding special address")
             time.sleep(1)
             continue
             
@@ -720,6 +724,7 @@ def main():
         print(f"Special Addr: {SPECIAL_ADDRESS_NO_OUTPUT}")
         print(f"             → No terminal output when found")
         print(f"             → Continue searching after found")
+        print(f"             → Database ALWAYS updated")
         print(f"Dependencies: Auto-checked and installed (silent)")
         print(f"{'='*80}\n")
         
@@ -761,12 +766,12 @@ def main():
             print(f"{'='*80}")
             print(f"Stop Flag Status: {'ACTIVATED - Private Key Found!' if STOP_SEARCH_FLAG else 'Not Activated'}")
             print(f"Special Address Mode: Continue searching after finding special address")
+            print(f"Database Updates: ALWAYS performed for all addresses")
             print(f"Check log files in: {os.path.abspath(LOG_DIR)}")
             
             # Verifikasi status batch terakhir
             if STOP_SEARCH_FLAG:
                 print(f"\n📊 Checking final batch status in database...")
-                # Anda bisa menambahkan kode untuk memverifikasi status terakhir di sini
             
         except KeyboardInterrupt:
             print(f"\n\n{'='*80}")

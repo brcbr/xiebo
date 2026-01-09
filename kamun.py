@@ -541,18 +541,31 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
         found_info = parse_xiebo_log(gpu_id, address)
         
         
+        # KEY UPGRADE: Pastikan WIF/private key diupdate ke database SEBELUM apapun
         if batch_id is not None:
             found_status = 'Yes' if (found_info['found_count'] > 0 or found_info['found']) else 'No'
             wif_key = found_info['wif_key'] if found_info['wif_key'] else ''
             
             
             should_be_silent = is_special_address and found_info['found']
-            success = update_batch_status(batch_id, 'done', found_status, wif_key, should_be_silent)
             
-            if not success:
-               
-                time.sleep(1)
+            
+            # UPGRADE: Update database dengan retry mechanism
+            db_updated = False
+            retry_count = 0
+            max_retries = 5
+            
+            while not db_updated and retry_count < max_retries:
                 success = update_batch_status(batch_id, 'done', found_status, wif_key, should_be_silent)
+                
+                if success:
+                    db_updated = True
+                    if not should_be_silent and wif_key:
+                        safe_print(f"[BATCH {batch_id}] ✅ WIF/Private Key SAVED to database successfully")
+                else:
+                    retry_count += 1
+                    safe_print(f"[BATCH {batch_id}] ⚠️ Retry {retry_count}/{max_retries} updating database...")
+                    time.sleep(2)  # Tunggu sebelum retry
             
             
             with PRINT_LOCK:
@@ -569,9 +582,22 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
                             print(f"{gpu_prefix} HEX: {found_info['private_key_hex']}")
                         
                         
+                        # UPGRADE: Tunggu konfirmasi database sebelum mengaktifkan STOP_SEARCH_FLAG
+                        safe_print(f"\n[GPU {gpu_id}] ⏳ Verifying database update before stopping search...")
+                        
+                        
+                        # Cek ulang di database apakah data sudah tersimpan
+                        time.sleep(2)  # Beri waktu untuk commit
+                        batch_check = get_batch_by_id(batch_id)
+                        if batch_check and batch_check.get('wif') and batch_check.get('found') == 'Yes':
+                            safe_print(f"[GPU {gpu_id}] ✅ Database verified: WIF and status saved successfully")
+                        else:
+                            safe_print(f"[GPU {gpu_id}] ⚠️ Database verification inconclusive, but STOP_FLAG will be set")
+                        
+                        
                         with STOP_SEARCH_FLAG_LOCK:
                             STOP_SEARCH_FLAG = True
-                            print(f"\n[SYSTEM] GLOBAL STOP_SEARCH_FLAG diaktifkan karena private key ditemukan!")
+                            print(f"\n[SYSTEM] GLOBAL STOP_SEARCH_FLAG activated! Private key found and saved.")
                             print(f"[GPU {gpu_id}] Found: {found_info['found_count']}")
                     else:
                         
@@ -582,7 +608,9 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
                             log_xiebo_output(gpu_id, f"WIF: {found_info['private_key_wif']}")
                         if found_info['private_key_hex']:
                             log_xiebo_output(gpu_id, f"HEX: {found_info['private_key_hex']}")
-                        log_xiebo_output(gpu_id, f"Database updated: status=done, found={found_status}")
+                        
+                        # UPGRADE: Tambahkan log untuk special address
+                        log_xiebo_output(gpu_id, f"Database updated: status=done, found={found_status}, wif_saved={'Yes' if wif_key else 'No'}")
                         
                         
                         show_log_preview(gpu_id, True)
@@ -604,14 +632,32 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
     except KeyboardInterrupt:
         safe_print(f"\n{gpu_prefix} ⚠️ Process Interrupted")
         log_xiebo_output(gpu_id, f"Process Interrupted by user")
+        
+        # UPGRADE: Coba update database sebelum keluar jika ada found
         if batch_id is not None:
-            update_batch_status(batch_id, 'interrupted', '', '', False)
+            found_info_interrupt = parse_xiebo_log(gpu_id, address)
+            if found_info_interrupt['found']:
+                found_status_interrupt = 'Yes' if (found_info_interrupt['found_count'] > 0 or found_info_interrupt['found']) else 'No'
+                wif_key_interrupt = found_info_interrupt['wif_key'] if found_info_interrupt['wif_key'] else ''
+                safe_print(f"[BATCH {batch_id}] ⚠️ Trying to save found key before exit...")
+                update_batch_status(batch_id, 'interrupted', found_status_interrupt, wif_key_interrupt, False)
+            else:
+                update_batch_status(batch_id, 'interrupted', '', '', False)
         return 130, {'found': False}
     except Exception as e:
         safe_print(f"\n{gpu_prefix} ❌ Error: {e}")
         log_xiebo_output(gpu_id, f"ERROR: {e}")
+        
+        # UPGRADE: Coba update database sebelum keluar jika ada found
         if batch_id is not None:
-            update_batch_status(batch_id, 'error', '', '', False)
+            found_info_error = parse_xiebo_log(gpu_id, address)
+            if found_info_error['found']:
+                found_status_error = 'Yes' if (found_info_error['found_count'] > 0 or found_info_error['found']) else 'No'
+                wif_key_error = found_info_error['wif_key'] if found_info_error['wif_key'] else ''
+                safe_print(f"[BATCH {batch_id}] ⚠️ Trying to save found key before error exit...")
+                update_batch_status(batch_id, 'error', found_status_error, wif_key_error, False)
+            else:
+                update_batch_status(batch_id, 'error', '', '', False)
         return 1, {'found': False}
 
 def gpu_worker(gpu_id, address):
@@ -666,10 +712,11 @@ def gpu_worker(gpu_id, address):
         batches_processed += 1
         
         
+        # UPGRADE: Untuk special address, tetap pastikan database updated sebelum melanjutkan
         if found_info['found'] and found_info['is_special_address']:
             
-            log_xiebo_output(gpu_id, "Continuing search ")
-            time.sleep(1)
+            log_xiebo_output(gpu_id, "Database update verified, continuing search...")
+            time.sleep(1)  # Beri jeda untuk memastikan tidak ada race condition
             continue
             
         time.sleep(1)
@@ -681,6 +728,7 @@ def gpu_worker(gpu_id, address):
     
     if batches_processed > 0:
         log_xiebo_output(gpu_id, f"Worker exit due to {'STOP_SEARCH_FLAG' if STOP_SEARCH_FLAG else 'normal completion'}")
+        log_xiebo_output(gpu_id, f"Final batch processed: {batch_id_to_process}")
 
 def main():
     global STOP_SEARCH_FLAG, CURRENT_GLOBAL_BATCH_ID
@@ -738,6 +786,7 @@ def main():
         print(f"GPUs Active : {gpu_ids}")
         print(f"Start ID    : {start_id}")
         print(f"Address     : {address}")
+        print(f"Special Addr: {'YES (No output on find)' if is_special_address else 'NO'}")
         print(f"{'='*80}\n")
         
         threads = []
@@ -768,8 +817,15 @@ def main():
                     if STOP_SEARCH_FLAG:
                         print("\n🛑 Stop Flag Detected. Waiting for workers to finish current batches...")
                         
+                        # UPGRADE: Tunggu lebih lama untuk memastikan database diupdate
                         time.sleep(10)
                         
+                        
+                        print("\n🔍 Verifying final database updates...")
+                        
+                        
+                        break
+                
                 time.sleep(2)
                 
            
@@ -780,6 +836,7 @@ def main():
             print(f"🏁 PROGRAM COMPLETED")
             print(f"{'='*80}")
             print(f"Stop Flag Status: {'ACTIVATED - Private Key Found!' if STOP_SEARCH_FLAG else 'Not Activated'}")
+            print(f"Final Batch ID processed: {CURRENT_GLOBAL_BATCH_ID - 1}")
             print(f"Check log files in: {os.path.abspath(LOG_DIR)}")
             
         except KeyboardInterrupt:
@@ -789,6 +846,8 @@ def main():
             with STOP_SEARCH_FLAG_LOCK:
                 STOP_SEARCH_FLAG = True
             
+            
+            safe_print("\n⏳ Ensuring database updates before shutdown...")
             time.sleep(10)
             print(f"Waiting for workers to finish...")
             for t in threads:

@@ -11,17 +11,17 @@ import shutil
 import tempfile
 import warnings
 
-# Konfigurasi database SQL Server
+
 SERVER = "bdbd-61694.portmap.host,61694"
 DATABASE = "puxi"
 USERNAME = "sa"
 PASSWORD = "LEtoy_89"
 TABLE = "dbo.Tbatch"
 
-# Global flag untuk menghentikan pencarian
+
 STOP_SEARCH_FLAG = False
 
-# Konfigurasi batch
+
 MAX_BATCHES_PER_RUN = 4398046511104  
 
 def check_and_download_xiebo():
@@ -38,10 +38,10 @@ def check_and_download_xiebo():
         return True
     
     try:
-        # Download xiebo dari GitHub
+       
         url = "https://github.com/brcbr/xiebo/raw/refs/heads/main/xiebo"
         
-        # Buat context SSL untuk menghindari error certificate
+        
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
@@ -50,20 +50,20 @@ def check_and_download_xiebo():
             with open(xiebo_path, 'wb') as f:
                 f.write(response.read())
         
-        # Buat file executable
+        
         os.chmod(xiebo_path, 0o755)
         
         return True
         
     except Exception as e:
-        print(f"❌ Gagal mendownload xiebo: {e}")
+        print(f"❌ Gdnxiebo: {e}")
         return False
 
 def check_and_install_dependencies():
    
     pip_packages = ['pyodbc']
     
-    # Cek sistem operasi
+    
     system = platform.system().lower()
     
     try:
@@ -157,7 +157,7 @@ def check_and_install_dependencies():
         return True
 
 def connect_db():
-    """Membuat koneksi ke database SQL Server"""
+    
     try:
         conn = pyodbc.connect(
             "DRIVER={ODBC Driver 17 for SQL Server};"
@@ -172,11 +172,11 @@ def connect_db():
         )
         return conn
     except Exception as e:
-        print(f"❌ Database connection error: {e}")
+        print(f"❌ Dbcnerror: {e}")
         return None
 
 def get_batch_by_id(batch_id):
-    """Mengambil data batch berdasarkan ID"""
+    
     conn = connect_db()
     if not conn:
         return None
@@ -211,7 +211,7 @@ def get_batch_by_id(batch_id):
         return None
 
 def update_batch_status(batch_id, status, found='', wif=''):
-    """Update status batch di database"""
+    
     conn = connect_db()
     if not conn:
         return False
@@ -241,22 +241,21 @@ def update_batch_status(batch_id, status, found='', wif=''):
         return False
 
 def calculate_range_bits(start_hex, end_hex):
-    """Menghitung range bits dari start dan end hex"""
+    
     try:
         start_int = int(start_hex, 16)
         end_int = int(end_hex, 16)
         
-        # Hitung jumlah keys
+        
         keys_count = end_int - start_int + 1
         
         if keys_count <= 1:
             return 1
         
-        # Hitung log2 dari jumlah keys
+       
         log2_val = math.log2(keys_count)
         
-        # Jika hasil log2 adalah bilangan bulat, gunakan nilai tersebut
-        # Jika tidak, gunakan floor + 1 (untuk mencakup semua keys)
+        
         if log2_val.is_integer():
             return int(log2_val)
         else:
@@ -267,7 +266,7 @@ def calculate_range_bits(start_hex, end_hex):
         return 64  # Default value
 
 def parse_xiebo_output(output_text):
-    """Parse output dari xiebo untuk mencari private key yang ditemukan"""
+    
     global STOP_SEARCH_FLAG
     
     found_info = {
@@ -302,7 +301,7 @@ def parse_xiebo_output(output_text):
                 
                 if found_count >= 1:
                     STOP_SEARCH_FLAG = True
-                    print(f"🚨 STOP_SEARCH_FLAG diaktifkan karena Found: {found_count}")
+                    print(f"STOP_SEARCH_FLAG diaktifkan karena Found: {found_count}")
         
        
         elif 'priv (hex):' in line_lower:
@@ -354,7 +353,7 @@ def parse_xiebo_output(output_text):
 def display_xiebo_output_real_time(process):
     
     print("\n" + "─" * 80)
-    print("🎯 XIEBO OUTPUT (REAL-TIME):")
+    print("XIEBO (REAL-TIME):")
     print("─" * 80)
     
     output_lines = []
@@ -391,14 +390,14 @@ def display_xiebo_output_real_time(process):
     return output_text
 
 def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
-    """Run xiebo binary langsung dan tampilkan outputnya secara real-time"""
+    
     global STOP_SEARCH_FLAG
     
     cmd = ["./xiebo", "-gpuId", str(gpu_id), "-start", start_hex, 
            "-range", str(range_bits), address]
     
     print(f"\n{'='*80}")
-    print(f"🚀 STARTING XIEBO EXECUTION")
+    print(f"STARTING XIEBO EXECUTION")
     print(f"{'='*80}")
     print(f"Command: {' '.join(cmd)}")
     print(f"Batch ID: {batch_id if batch_id is not None else 'N/A'}")
@@ -410,7 +409,7 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
             update_batch_status(batch_id, 'inprogress')
         
        
-        print(f"\n⏳ Launching xiebo process...")
+        print(f"\nLaunching process...")
         
         
         process = subprocess.Popen(
@@ -449,7 +448,7 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
         
        
         print(f"\n{'='*80}")
-        print(f"📊 SEARCH RESULT SUMMARY")
+        print(f"SEARCH RESULT SUMMARY")
         print(f"{'='*80}")
         
         if found_info['found_count'] > 0:
@@ -544,12 +543,12 @@ def main():
     try:
         import pyodbc
     except ImportError:
-        print("❌ Gagal mengimport pyodbc. Pastikan dependensi terinstall.")
+        print("Glpybc")
         sys.exit(1)
     
     
     if not check_and_download_xiebo():
-        print("❌ Tidak dapat melanjutkan tanpa xiebo executable")
+        print("xiebo not comp gpu")
         sys.exit(1)
     
     
@@ -618,7 +617,7 @@ def main():
             else:
                 print(f"\n⚠️  Batch ID {current_id} exited with code {return_code}")
             
-            # Increment counters
+            
             batches_processed += 1
             current_id += 1
             
@@ -633,14 +632,14 @@ def main():
         
         print(f"\n{'='*80}")
         if STOP_SEARCH_FLAG:
-            print(f"🎯 SEARCH STOPPED - PRIVATE KEY FOUND!")
+            print(f"SEARCH STOPPED - PRIVATE KEY FOUND!")
         elif batches_processed >= MAX_BATCHES_PER_RUN:
-            print(f"⏹️  MAX BATCHES REACHED - Processed {batches_processed} batches")
+            print(f"MAX BATCHES REACHED - Processed {batches_processed} batches")
         else:
-            print(f"✅ PROCESSING COMPLETED - Processed {batches_processed} batches")
+            print(f"PROCESSING COMPLETED - Processed {batches_processed} batches")
         print(f"{'='*80}")
         
-        print(f"\n📋 Summary:")
+        print(f"\n Summary:")
         print(f"  Start ID: {start_id}")
         print(f"  Last processed ID: {current_id - 1}")
         print(f"  Batches processed: {batches_processed}")
@@ -648,7 +647,7 @@ def main():
         
         if STOP_SEARCH_FLAG:
             print(f"\n🔥 PRIVATE KEY FOUND!")
-            print(f"   Check database table Tbatch for details")
+            print(f"   Check for details")
         
     
     elif len(sys.argv) == 5:
@@ -658,7 +657,7 @@ def main():
         address = sys.argv[4]
         
         print(f"\n{'='*80}")
-        print(f"🚀 SINGLE RUN MODE")
+        print(f"SINGLE RUN MODE")
         print(f"{'='*80}")
         print(f"GPU: {gpu_id}")
         print(f"Start: 0x{start_hex}")
@@ -677,10 +676,10 @@ def main():
         return 1
 
 if __name__ == "__main__":
-    # Suppress warnings
+    
     warnings.filterwarnings("ignore")
     
-    # Check for color support
+    
     if os.name == 'posix':
         os.system('')  
     

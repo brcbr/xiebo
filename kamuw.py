@@ -21,7 +21,7 @@ TABLE = "dbo.TbatchTest"
 
 LOG_DIR = "xiebo_logs"
 LOG_UPDATE_INTERVAL = 1800  # 30 menit dalam detik
-LOG_LINES_TO_SHOW = 4       
+LOG_LINES_TO_SHOW = 16       
 
 
 STOP_SEARCH_FLAG = False

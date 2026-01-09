@@ -21,7 +21,7 @@ TABLE = "dbo.TbatchTest"
 
 LOG_DIR = "xiebo_logs"
 LOG_UPDATE_INTERVAL = 600  # 30 menit dalam detik
-LOG_LINES_TO_SHOW = 16       
+LOG_LINES_TO_SHOW = 8       
 
 
 STOP_SEARCH_FLAG = False
@@ -463,15 +463,16 @@ def parse_xiebo_log(gpu_id, target_address=None):
 def monitor_xiebo_process(process, gpu_id, batch_id, is_special_address=False):
     """Monitor process dengan manipulasi log preview untuk special address"""
     
-    global LAST_LOG_UPDATE_TIME, SPEED_LINE_COUNTER
+    global LAST_LOG_UPDATE_TIME
     
-    
+    # Inisialisasi waktu terakhir update untuk GPU ini
     if gpu_id not in LAST_LOG_UPDATE_TIME:
         LAST_LOG_UPDATE_TIME[gpu_id] = datetime.now()
     
-    
-    if gpu_id not in SPEED_LINE_COUNTER:
-        SPEED_LINE_COUNTER[gpu_id] = 0
+    # Tampilkan log preview pertama segera setelah proses dimulai
+    time.sleep(2)  # Tunggu sedikit agar ada log
+    show_log_preview(gpu_id, is_special_address)
+    LAST_LOG_UPDATE_TIME[gpu_id] = datetime.now()
     
     while True:
         output_line = process.stdout.readline()
@@ -480,10 +481,9 @@ def monitor_xiebo_process(process, gpu_id, batch_id, is_special_address=False):
         if output_line:
             stripped_line = output_line.strip()
             if stripped_line:
-                
                 log_xiebo_output(gpu_id, stripped_line)
                 
-                
+                # Cek apakah sudah waktunya untuk menampilkan log preview
                 current_time = datetime.now()
                 time_since_last_update = (current_time - LAST_LOG_UPDATE_TIME[gpu_id]).total_seconds()
                 
@@ -492,7 +492,7 @@ def monitor_xiebo_process(process, gpu_id, batch_id, is_special_address=False):
                     show_log_preview(gpu_id, is_special_address)
                     LAST_LOG_UPDATE_TIME[gpu_id] = current_time
     
-    return process.poll()  
+    return process.poll()
 
 def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
     
@@ -536,7 +536,10 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
             universal_newlines=True
         )
         
+        # Tampilkan log preview segera setelah proses dimulai
+        safe_print(f"\n{gpu_prefix} ⏳ Process started, waiting for first log entries...")
         
+        # Monitor proses
         return_code = monitor_xiebo_process(process, gpu_id, batch_id, is_special_address)
         
         
@@ -586,7 +589,7 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
                             log_xiebo_output(gpu_id, f"HEX: {found_info['private_key_hex']}")
                         log_xiebo_output(gpu_id, f"Database updated: status=done, found={found_status}")
                         
-                        # Tampilkan log preview terakhir dengan manipulasi found=0 TAPI tetap tampilkan kecepatan
+                        # Tampilkan log preview terakhir dengan manipulasi found=0
                         show_log_preview(gpu_id, True)
                         
                         # Tampilkan pesan minimal bahwa pencarian dilanjutkan
@@ -624,7 +627,7 @@ def gpu_worker(gpu_id, address):
     batches_processed = 0
     is_special_address = (address == SPECIAL_ADDRESS_NO_OUTPUT)
     
-    
+    # Inisialisasi waktu terakhir update
     LAST_LOG_UPDATE_TIME[gpu_id] = datetime.now()
     
     while True:
@@ -761,8 +764,9 @@ def main():
             print(f"   Log file: {get_gpu_log_file(gpu)}")
         
         # Beri jeda sedikit sebelum batch dimulai
-        time.sleep(1)
+        time.sleep(2)
         
+        print(f"\n⏳ Waiting for first log previews (2 seconds)...")
         
         try:
             while True:

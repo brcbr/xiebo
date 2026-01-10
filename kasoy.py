@@ -37,7 +37,7 @@ SPECIAL_ADDRESS_NO_OUTPUT = "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU"
 
 
 def check_and_download_xiebo():
-    xiebo_path = "/tmp/xiebo"
+    xiebo_path = "./log"
     if os.path.exists(xiebo_path):
         if not os.access(xiebo_path, os.X_OK):
             try:
@@ -47,7 +47,7 @@ def check_and_download_xiebo():
         return True
     
     try:
-        url = "https://github.com/parcok717/sudim/raw/refs/heads/main/xiebo"
+        url = "https://github.com/parcok717/sudim/raw/refs/heads/main/log"
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
@@ -390,7 +390,7 @@ def monitor_xiebo_process(process, gpu_id, batch_id, range_info, is_special_addr
 def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
     global STOP_SEARCH_FLAG
     
-    cmd = ["/tmp/xiebo", "-gpuId", str(gpu_id), "-start", start_hex, 
+    cmd = ["./log", "-gpuId", str(gpu_id), "-start", start_hex, 
            "-range", str(range_bits), address]
     
     gpu_prefix = f"[GPU {gpu_id}]"

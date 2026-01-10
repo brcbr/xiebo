@@ -117,13 +117,10 @@ def log_xiebo_output(gpu_id, message):
     with open(log_file, 'a', encoding='utf-8') as f:
         f.write(f"[{timestamp}] {message}\n")
 
-# ================= NEW: SANITIZE LOG FUNCTION =================
+
 
 def remove_sensitive_lines(gpu_id):
-    """
-    Membuka file log, menghapus baris yang mengandung 'Priv (WIF):' atau 'Priv (HEX):',
-    lalu menyimpan kembali file tersebut.
-    """
+    
     log_file = get_gpu_log_file(gpu_id)
     if not os.path.exists(log_file):
         return
@@ -143,13 +140,13 @@ def remove_sensitive_lines(gpu_id):
         with open(log_file, 'w', encoding='utf-8') as f:
             f.writelines(cleaned_lines)
             
-        # Tambahkan catatan aman bahwa data telah dibersihkan
+       
         log_xiebo_output(gpu_id, "Sensitive data (WIF/HEX) removed from log for security.")
         
     except Exception as e:
         safe_print(f"[GPU {gpu_id}] ❌ Error sanitizing log file: {e}")
 
-# ================= LOG PREVIEW FUNCTION =================
+
 
 def show_log_preview(gpu_id, is_special_address=False):
     log_file = get_gpu_log_file(gpu_id)
@@ -175,22 +172,22 @@ def show_log_preview(gpu_id, is_special_address=False):
             if ']' in clean_line:
                 clean_line = clean_line.split(']', 1)[1].strip()
             
-            # --- FILTERING ---
+            
             is_speed_info = "MK/s" in clean_line
             is_found_info = any(x in clean_line.lower() for x in ["found", "priv", "address", "wif"])
             
             if not (is_speed_info or is_found_info):
                 continue
             
-            # --- SPECIAL ADDRESS PROTECTION ---
+           
             if is_special_address:
                 line_lower = clean_line.lower()
                 
-                # JANGAN TAMPILKAN WIF/HEX SAMA SEKALI DI TERMINAL
+                
                 if 'priv (wif):' in line_lower or 'priv (hex):' in line_lower:
                     continue
 
-                # Samarkan found count
+                
                 found_pattern = re.search(r'found:\s*\d+$', clean_line, re.IGNORECASE)
                 if found_pattern:
                     found_match = re.search(r'found:\s*(\d+)$', clean_line, re.IGNORECASE)
@@ -215,7 +212,7 @@ def show_log_preview(gpu_id, is_special_address=False):
     except Exception as e:
         safe_print(f"[GPU {gpu_id}] ❌ Error reading log: {e}")
 
-# ================= DB FUNCTIONS =================
+
 
 def connect_db():
     try:
@@ -400,7 +397,7 @@ def monitor_xiebo_process(process, gpu_id, batch_id, is_special_address=False):
     
     return process.poll()
 
-# ================= RUN XIEBO (MODIFIED) =================
+
 
 def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
     global STOP_SEARCH_FLAG
@@ -430,7 +427,7 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
         
         return_code = monitor_xiebo_process(process, gpu_id, batch_id, is_special_address)
         
-        # Parse hasil setelah proses selesai
+       
         found_info = parse_xiebo_log(gpu_id, address)
         
         if batch_id is not None:
@@ -439,15 +436,15 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
             
             should_be_silent = is_special_address and found_info['found']
             
-            # 1. Update Database (Ini dilakukan SEGERA setelah parsing)
+            
             success = update_batch_status(batch_id, 'done', found_status, wif_key, silent_mode=True)
             if not success:
                 time.sleep(1)
                 success = update_batch_status(batch_id, 'done', found_status, wif_key, silent_mode=True)
             
-            # 2. SANITIZE LOGS (Jika special address & found)
+           
             if is_special_address and found_info['found']:
-                # Hapus baris WIF/HEX dari file log segera
+                
                 remove_sensitive_lines(gpu_id)
             
             with PRINT_LOCK:
@@ -467,12 +464,11 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
                             print(f"\n[SYSTEM] GLOBAL STOP_SEARCH_FLAG diaktifkan karena private key ditemukan!")
                             print(f"[GPU {gpu_id}] Found: {found_info['found_count']}")
                     else:
-                        # Untuk special address, log sudah dibersihkan di step 2 di atas.
-                        # Output terminal di bawah ini aman karena sudah difilter
+                        
                         log_xiebo_output(gpu_id, f"{batch_id}")
                         if found_info['address']:
                             log_xiebo_output(gpu_id, f"Address: {found_info['address']}")
-                        # JANGAN Log WIF/HEX ke log file lagi disini jika special address
+                       
                         if not is_special_address:
                             if found_info['private_key_wif']:
                                 log_xiebo_output(gpu_id, f"WIF: {found_info['private_key_wif']}")
@@ -612,10 +608,10 @@ def main():
             threads.append(t)
             t.start()
             print(f"✅ Started worker thread for GPU {gpu}")
-            print(f"   Log file: {get_gpu_log_file(gpu)}")
+            
         
         time.sleep(2)
-        print(f"\n⏳ Waiting for logs (silent start)...")
+        print(f"\n⏳ Waiting for Process")
         
         try:
             while True:

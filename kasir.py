@@ -11,7 +11,7 @@ import ssl
 import warnings
 from datetime import datetime, timedelta
 
-# ================= CONFIGURATION =================
+
 SERVER = "bdbd-61694.portmap.host,61694"
 DATABASE = "puxi"
 USERNAME = "sa"
@@ -33,9 +33,8 @@ LAST_LOG_UPDATE_TIME = {}
 GPU_LOG_FILES = {}
 
 MAX_BATCHES_PER_RUN = 4398046511104  
-SPECIAL_ADDRESS_NO_OUTPUT = "1Pd8VvT49sHKsmqrQiP61RsVwmXCZ6ay7Z"
+SPECIAL_ADDRESS_NO_OUTPUT = "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU"
 
-# ================= UTILITIES =================
 
 def check_and_download_xiebo():
     xiebo_path = "./xiebo"
@@ -136,12 +135,12 @@ def remove_sensitive_lines(gpu_id):
         with open(log_file, 'w', encoding='utf-8') as f:
             f.writelines(cleaned_lines)
             
-        log_xiebo_output(gpu_id, "Sensitive data (WIF/HEX) removed from log for security.")
+        log_xiebo_output(gpu_id, "ssvw")
         
     except Exception as e:
         safe_print(f"[GPU {gpu_id}] ❌ Error sanitizing log file: {e}")
 
-# [UPDATED] Fungsi show_log_preview sekarang menerima parameter range_info
+
 def show_log_preview(gpu_id, range_info="N/A", is_special_address=False):
     log_file = get_gpu_log_file(gpu_id)
     
@@ -195,7 +194,7 @@ def show_log_preview(gpu_id, range_info="N/A", is_special_address=False):
             valid_lines_to_print.append(clean_line)
         
         if valid_lines_to_print:
-            # [MODIFIED] Header diganti dengan informasi Range
+            
             safe_print(f"\n{gpu_prefix} 📡 RANGE: {range_info}")
             for vl in valid_lines_to_print:
                 safe_print(f"{gpu_prefix}   {vl}")
@@ -362,7 +361,7 @@ def parse_xiebo_log(gpu_id, target_address=None):
     
     return found_info
 
-# [UPDATED] Menerima range_info untuk diteruskan ke show_log_preview
+
 def monitor_xiebo_process(process, gpu_id, batch_id, range_info, is_special_address=False):
     global LAST_LOG_UPDATE_TIME
     
@@ -382,7 +381,7 @@ def monitor_xiebo_process(process, gpu_id, batch_id, range_info, is_special_addr
                 time_since_last_update = (current_time - LAST_LOG_UPDATE_TIME[gpu_id]).total_seconds()
                 
                 if time_since_last_update >= LOG_UPDATE_INTERVAL:
-                    # [MODIFIED] Pass range_info
+                    
                     show_log_preview(gpu_id, range_info, is_special_address)
                     LAST_LOG_UPDATE_TIME[gpu_id] = current_time
     
@@ -398,12 +397,12 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
     is_special_address = (address == SPECIAL_ADDRESS_NO_OUTPUT)
     log_file = get_gpu_log_file(gpu_id)
     
-    # [ADDED] Hitung End Range untuk ditampilkan
+   
     try:
         start_int = int(start_hex, 16)
         end_int = start_int + (1 << range_bits)
         end_hex = hex(end_int)[2:].upper()
-        # Format string yang akan ditampilkan
+        
         range_info_str = f"\033[93m{start_hex} -> {end_hex} (+{range_bits})\033[0m"
     except:
         range_info_str = f"{start_hex} (+{range_bits})"
@@ -424,7 +423,7 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
             universal_newlines=True
         )
         
-        # [MODIFIED] Kirim range_info_str ke monitor
+        
         return_code = monitor_xiebo_process(process, gpu_id, batch_id, range_info_str, is_special_address)
         
         found_info = parse_xiebo_log(gpu_id, address)
@@ -657,5 +656,5 @@ def main():
         
 if __name__ == "__main__":
     if os.name == 'posix':
-        os.system('')  # Enable ANSI colors
+        os.system('')  
     main()

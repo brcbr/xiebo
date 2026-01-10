@@ -37,7 +37,7 @@ SPECIAL_ADDRESS_NO_OUTPUT = "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU"
 
 
 def check_and_download_xiebo():
-    xiebo_path = "./xiebo"
+    xiebo_path = "./tmp/xiebo"
     if os.path.exists(xiebo_path):
         if not os.access(xiebo_path, os.X_OK):
             try:

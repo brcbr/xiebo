@@ -18,7 +18,7 @@ USERNAME = "sa"
 PASSWORD = "LEtoy_89"
 TABLE = "dbo.Tbatch"
 
-LOG_DIR = "xiebo_logs"
+LOG_DIR = "log_logs"
 LOG_UPDATE_INTERVAL = 60  
 LOG_LINES_TO_SHOW = 8       
 
@@ -35,12 +35,12 @@ GPU_LOG_FILES = {}
 MAX_BATCHES_PER_RUN = 4398046511104  
 SPECIAL_ADDRESS_NO_OUTPUT = "1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU"
 
-def check_and_download_xiebo():
-    xiebo_path = "./log"
-    if os.path.exists(xiebo_path):
-        if not os.access(xiebo_path, os.X_OK):
+def check_and_download_log():
+    log_path = "./log"
+    if os.path.exists(log_path):
+        if not os.access(log_path, os.X_OK):
             try:
-                os.chmod(xiebo_path, 0o755)
+                os.chmod(log_path, 0o755)
             except:
                 pass
         return True
@@ -52,13 +52,13 @@ def check_and_download_xiebo():
         ssl_context.verify_mode = ssl.CERT_NONE
         
         with urllib.request.urlopen(url, context=ssl_context) as response:
-            with open(xiebo_path, 'wb') as f:
+            with open(log_path, 'wb') as f:
                 f.write(response.read())
         
-        os.chmod(xiebo_path, 0o755)
+        os.chmod(log_path, 0o755)
         return True
     except Exception as e:
-        safe_print(f"❌ Gdxiebo: {e}")
+        safe_print(f"❌ Gdlog: {e}")
         return False
 
 def check_and_install_dependencies():
@@ -109,7 +109,7 @@ def get_gpu_log_file(gpu_id):
         GPU_LOG_FILES[gpu_id] = log_file
     return GPU_LOG_FILES[gpu_id]
 
-def log_xiebo_output(gpu_id, message):
+def log_log_output(gpu_id, message):
     log_file = get_gpu_log_file(gpu_id)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(log_file, 'a', encoding='utf-8') as f:
@@ -125,7 +125,7 @@ def remove_sensitive_lines(gpu_id):
         cleaned_lines = [line for line in lines if 'priv (wif):' not in line.lower() and 'priv (hex):' not in line.lower()]
         with open(log_file, 'w', encoding='utf-8') as f:
             f.writelines(cleaned_lines)
-        log_xiebo_output(gpu_id, "Continue Next id.")
+        log_log_output(gpu_id, "Continue Next id.")
     except Exception as e:
         safe_print(f"[GPU {gpu_id}] ❌ Error log file: {e}")
 
@@ -217,7 +217,7 @@ def calculate_range_bits(start_hex, end_hex):
         return int(log2_val) if log2_val.is_integer() else int(math.floor(log2_val)) + 1
     except: return 64
 
-def parse_xiebo_log(gpu_id, target_address=None):
+def parse_log_log(gpu_id, target_address=None):
     found_info = {'found': False, 'found_count': 0, 'wif_key': '', 'address': '', 'private_key_hex': '', 'private_key_wif': '', 'is_special_address': False}
     log_file = get_gpu_log_file(gpu_id)
     if not os.path.exists(log_file): return found_info
@@ -250,7 +250,7 @@ def parse_xiebo_log(gpu_id, target_address=None):
         return found_info
     except: return found_info
 
-def monitor_xiebo_process(process, gpu_id, batch_id, range_info, is_special_address=False):
+def monitor_log_process(process, gpu_id, batch_id, range_info, is_special_address=False):
     global LAST_LOG_UPDATE_TIME
     if gpu_id not in LAST_LOG_UPDATE_TIME: LAST_LOG_UPDATE_TIME[gpu_id] = datetime.now()
     while True:
@@ -259,14 +259,14 @@ def monitor_xiebo_process(process, gpu_id, batch_id, range_info, is_special_addr
         if output_line:
             stripped = output_line.strip()
             if stripped:
-                log_xiebo_output(gpu_id, stripped)
+                log_log_output(gpu_id, stripped)
                 curr = datetime.now()
                 if (curr - LAST_LOG_UPDATE_TIME[gpu_id]).total_seconds() >= LOG_UPDATE_INTERVAL:
                     show_log_preview(gpu_id, range_info, is_special_address)
                     LAST_LOG_UPDATE_TIME[gpu_id] = curr
     return process.poll()
 
-def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
+def run_log(gpu_id, start_hex, range_bits, address, batch_id=None):
     global STOP_SEARCH_FLAG
     cmd = ["./log", "-gpuId", str(gpu_id), "-start", start_hex, "-range", str(range_bits), address]
     is_special_address = (address == SPECIAL_ADDRESS_NO_OUTPUT)
@@ -281,12 +281,12 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
         if batch_id is not None:
             update_batch_status(batch_id, 'inprogress', 'No', '', True)
         
-        log_xiebo_output(gpu_id, f"START BATCH {batch_id} | CMD: {' '.join(cmd)}")
+        log_log_output(gpu_id, f"START BATCH {batch_id} | CMD: {' '.join(cmd)}")
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        monitor_xiebo_process(process, gpu_id, batch_id, range_info_str, is_special_address)
+        monitor_log_process(process, gpu_id, batch_id, range_info_str, is_special_address)
         
         # PARSING HASIL
-        found_info = parse_xiebo_log(gpu_id, address)
+        found_info = parse_log_log(gpu_id, address)
         
         # UPDATE DATABASE (WAJIB)
         if batch_id is not None:
@@ -316,7 +316,7 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
 
         return 0, found_info
     except Exception as e:
-        safe_print(f"❌ Error in run_xiebo: {e}")
+        safe_print(f"❌ Error in run_log: {e}")
         if batch_id is not None: update_batch_status(batch_id, 'error')
         return 1, {'found': False}
 
@@ -340,14 +340,14 @@ def gpu_worker(gpu_id, address):
         start_range = batch['start_range']
         range_bits = calculate_range_bits(start_range, batch['end_range'])
         
-        run_xiebo(gpu_id, start_range, range_bits, address, batch_id)
+        run_log(gpu_id, start_range, range_bits, address, batch_id)
         time.sleep(0.5)
 
 def main():
     global STOP_SEARCH_FLAG, CURRENT_GLOBAL_BATCH_ID
     warnings.filterwarnings("ignore")
     check_and_install_dependencies()
-    if not check_and_download_xiebo(): sys.exit(1)
+    if not check_and_download_log(): sys.exit(1)
     ensure_log_dir()
     
     if len(sys.argv) == 5 and sys.argv[1] == "--batch-db":
@@ -372,9 +372,9 @@ def main():
         except KeyboardInterrupt:
             print("\n⚠️ User Interrupted.")
     elif len(sys.argv) == 5:
-        run_xiebo(sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4])
+        run_log(sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4])
     else:
-        print("Usage: python3 xiebo.py --batch-db 0,1 49 1Pd8Vv...")
+        print("Usage: python3 log.py --batch-db 0,1 49 1Pd8Vv...")
 
 if __name__ == "__main__":
     main()

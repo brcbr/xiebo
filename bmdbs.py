@@ -129,8 +129,8 @@ def calculate_range_bits(start_hex, end_hex):
         print(f"❌ Error calculating range bits: {e}")
         return 64  # Default value
 
-def parse_xiebo_output(output_text):
-    """Parse output dari xiebo untuk mencari private key yang ditemukan"""
+def parse_log_output(output_text):
+    """Parse output dari log untuk mencari private key yang ditemukan"""
     global STOP_SEARCH_FLAG
     
     found_info = {
@@ -214,10 +214,10 @@ def parse_xiebo_output(output_text):
     
     return found_info
 
-def display_xiebo_output_real_time(process):
-    """Menampilkan output xiebo secara real-time"""
+def display_log_output_real_time(process):
+    """Menampilkan output log secara real-time"""
     print("\n" + "─" * 80)
-    print("🎯 XIEBO OUTPUT (REAL-TIME):")
+    print("🎯 log OUTPUT (REAL-TIME):")
     print("─" * 80)
     
     output_lines = []
@@ -253,15 +253,15 @@ def display_xiebo_output_real_time(process):
     
     return output_text
 
-def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
-    """Run xiebo binary langsung dan tampilkan outputnya secara real-time"""
+def run_log(gpu_id, start_hex, range_bits, address, batch_id=None):
+    """Run log binary langsung dan tampilkan outputnya secara real-time"""
     global STOP_SEARCH_FLAG
     
-    cmd = ["./xiebo", "-gpuId", str(gpu_id), "-start", start_hex, 
+    cmd = ["./log", "-gpuId", str(gpu_id), "-start", start_hex, 
            "-range", str(range_bits), address]
     
     print(f"\n{'='*80}")
-    print(f"🚀 STARTING XIEBO EXECUTION")
+    print(f"🚀 STARTING log EXECUTION")
     print(f"{'='*80}")
     print(f"Command: {' '.join(cmd)}")
     print(f"Batch ID: {batch_id if batch_id is not None else 'N/A'}")
@@ -272,8 +272,8 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
         if batch_id is not None:
             update_batch_status(batch_id, 'inprogress')
         
-        # Jalankan xiebo dan tampilkan output secara real-time
-        print(f"\n⏳ Launching xiebo process...")
+        # Jalankan log dan tampilkan output secara real-time
+        print(f"\n⏳ Launching log process...")
         
         # Gunakan Popen untuk mendapatkan output real-time
         process = subprocess.Popen(
@@ -286,13 +286,13 @@ def run_xiebo(gpu_id, start_hex, range_bits, address, batch_id=None):
         )
         
         # Tampilkan output secara real-time
-        output_text = display_xiebo_output_real_time(process)
+        output_text = display_log_output_real_time(process)
         
         # Tunggu proses selesai
         return_code = process.wait()
         
         # Parse output untuk mencari private key
-        found_info = parse_xiebo_output(output_text)
+        found_info = parse_log_output(output_text)
         
         # Update status berdasarkan hasil
         if batch_id is not None:
@@ -385,7 +385,7 @@ def main():
     
     # Parse arguments
     if len(sys.argv) < 2:
-        print("Xiebo Batch Runner with SQL Server Database")
+        print("log Batch Runner with SQL Server Database")
         print("Usage:")
         print("  Single run: python3 bm.py GPU_ID START_HEX RANGE_BITS ADDRESS")
         print("  Batch run from DB: python3 bm.py --batch-db GPU_ID START_ID ADDRESS")
@@ -457,7 +457,7 @@ def main():
             print(f"Address: {address}")
             print(f"{'='*80}")
             
-            return_code, found_info = run_xiebo(gpu_id, start_range, range_bits, address, batch_id=current_id)
+            return_code, found_info = run_log(gpu_id, start_range, range_bits, address, batch_id=current_id)
             
             if return_code == 0:
                 print(f"\n✅ Batch ID {current_id} completed successfully")
@@ -512,7 +512,7 @@ def main():
         print(f"Address: {address}")
         print(f"{'='*80}")
         
-        return_code, found_info = run_xiebo(gpu_id, start_hex, range_bits, address)
+        return_code, found_info = run_log(gpu_id, start_hex, range_bits, address)
         
         return return_code
     
@@ -523,16 +523,16 @@ def main():
         return 1
 
 if __name__ == "__main__":
-    # Check if xiebo exists
-    if not os.path.exists("./xiebo"):
-        print("❌ Error: xiebo binary not found in current directory")
-        print("Please copy xiebo executable to this directory")
+    # Check if log exists
+    if not os.path.exists("./log"):
+        print("❌ Error: log binary not found in current directory")
+        print("Please copy log executable to this directory")
         sys.exit(1)
     
     # Check if executable
-    if not os.access("./xiebo", os.X_OK):
-        print("⚠️  xiebo is not executable, trying to fix...")
-        os.chmod("./xiebo", 0o755)
+    if not os.access("./log", os.X_OK):
+        print("⚠️  log is not executable, trying to fix...")
+        os.chmod("./log", 0o755)
     
     # Check for color support
     if os.name == 'posix':
